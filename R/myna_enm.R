@@ -93,11 +93,8 @@ head(thin_myna2)
 
 #worldclim <- getData('worldclim', var='bio', res=2.5)
 plot(worldclim[[1]], main = "Annual Mean Temp \n and Common Myna Occurrences")
-<<<<<<< HEAD
 points(thin_myna2$lon, thin_myna2$lat ,col = "blue", cex = .25)
-=======
 points(points(myna_unique$lon, myna_unique$lat ,col = "blue", cex = .25))
->>>>>>> 3b122253c90617ab409463e2d2d7e68c65d689f7
 
 plot(worldclim[[19]], main = "Precip in Coldest Quarter \n and Common Myna Occurrences")
 points(points(myna_unique$lon, myna_unique$lat ,col = "blue", cex = .25))
