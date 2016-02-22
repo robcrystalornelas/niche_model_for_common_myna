@@ -93,8 +93,45 @@ head(thin_myna2)
 
 #worldclim <- getData('worldclim', var='bio', res=2.5)
 plot(worldclim[[1]], main = "Annual Mean Temp \n and Common Myna Occurrences")
+<<<<<<< HEAD
 points(thin_myna2$lon, thin_myna2$lat ,col = "blue", cex = .25)
+=======
+points(points(myna_unique$lon, myna_unique$lat ,col = "blue", cex = .25))
+>>>>>>> 3b122253c90617ab409463e2d2d7e68c65d689f7
 
 plot(worldclim[[19]], main = "Precip in Coldest Quarter \n and Common Myna Occurrences")
 points(points(myna_unique$lon, myna_unique$lat ,col = "blue", cex = .25))
 
+<<<<<<< HEAD
+=======
+#####
+
+# Spatial Thinning
+
+#####
+
+crs <- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs') # set coordinate system
+
+myna_thin <-spThin( #thinning function
+  myna_unique, 
+  x.col = "lon",
+  y.col = "lat",
+  dist = 5000,
+  method= "gurobi", #can change to "gurobi" to make it even faster, but have to install it first
+  great.circle.distance=TRUE)
+summary(myna_thin)
+
+# Saving the thinned file####
+# print temporary dir
+print(tempdir())
+write.SpThin(
+  myna_thin,
+  coords=FALSE,
+  dir=tempdir()
+)
+#can elect to read in .csv of all thinned points
+thin_myna2<-read.csv("thin_0001.csv", head=T)
+head(thin_myna2)
+thin_ptw2_coords<-thin_myna2[,1:3]
+
+>>>>>>> 3b122253c90617ab409463e2d2d7e68c65d689f7
