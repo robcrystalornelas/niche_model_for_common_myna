@@ -99,7 +99,7 @@ points(points(myna_unique$lon, myna_unique$lat ,col = "blue", cex = .25))
 
 plot(worldclim[[19]], main = "Precip in Coldest Quarter \n and Common Myna Occurrences")
 points(points(myna_unique$lon, myna_unique$lat ,col = "blue", cex = .25))
-
+?points
 str(worldclim[[19]])
 #Pop density from SEDAC @ Columbia
 population<-raster(paste(getwd(), "/Pop_density_2000/pop2.tif", sep = ""))
@@ -167,12 +167,19 @@ map_bioclim_predictions <-ggplot(data=df_myna_bioclim_predictions, aes(y=lat, x=
         panel.background = element_rect(fill = 'black')) +
   #scale_fill_gradientn(colours=c("#ffffcc","#d9f0a3","#addd8e","#78c679","#41ab5d","#238443", "#005a32"), #green
   #scale_fill_gradientn(colours=c("blue4","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"), na.value = "black",limits=c(0,.66))
-  scale_fill_gradientn(colours=c("#efedf5","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"), na.value = "black",limits=c(0,.66))
-  
+  #scale_fill_gradientn(colours=c("#efedf5","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"), na.value = "black",limits=c(0,.66))
+  scale_fill_gradientn(colours=c("dodgerblue4","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"), na.value = "black",limits=c(0,.66))
+
 map_bioclim_predictions #full world map
 
 map_bioclim_predictions_nc_america<-map_bioclim_predictions + coord_fixed(xlim = c(-125.8,-62.2), ylim = c(3, 50)) #north/central america
 map_bioclim_predictions_nc_america
+
+map_bioclim_predictions_nc_america_points <- map_bioclim_predictions_nc_america + geom_point(data=thin_myna_coords, aes(x=lon, y=lat),size=.25, color = "magenta2")
+#map_bioclim_predictions_nc_america_points
+
 map_bioclim_predictions_florida <- map_bioclim_predictions + coord_fixed(xlim = c(-88,-79), ylim = c(24, 32)) #florida
 map_bioclim_predictions_florida
 
+map_bioclim_predictions_florida_points<- map_bioclim_predictions_florida + geom_point(data=thin_myna_coords, aes(x=lon, y=lat),size=.25, color = "magenta2")
+map_bioclim_predictions_florida_points
