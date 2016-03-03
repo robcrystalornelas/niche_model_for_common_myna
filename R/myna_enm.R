@@ -285,23 +285,13 @@ ggmap_myna <-ggplot(data=df_myna, aes(y=lat, x=lon)) +
   )
 
 worldmap_myna <- ggmap_myna + scale_fill_gradientn(colours=c("blue4","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"),
-                                                                    na.value = "black",limits=c(0,.90))
-
-puerto_rico_prediction_map_no_host <- p_no_host_all_worldclim2 + 
-  scale_fill_gradientn(colours=c("blue4","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"),na.value = "black",limits=c(0,.90)) + 
-  coord_fixed(xlim = c(-70, -62),  ylim = c(16, 20)) #zoom in on Puerto Rico
-
+                                                                    na.value = "black",limits=c(0,.82))
+worldmap_myna
 
 us_prediction_map_no_host <- p_no_host_all_worldclim2 + scale_fill_gradientn(colours=c("blue4","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"),
                                                                              na.value = "black",limits=c(0,.90)) + 
   coord_cartesian(xlim = c(-125.8,-62.2), ylim = c(22.8, 50)) #zoom in on US
 #us_prediction_map_no_host
-
-hawaii_prediction_map_no_host<- p_no_host_all_worldclim2 + scale_fill_gradientn(colours=c("blue4","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"),
-                                                                                na.value = "black",limits=c(0,.90)) + 
-  coord_cartesian(xlim = c(-161, -154),  ylim = c(18, 23)) #zoom in on hawaii
-
-
 
 ####
 
