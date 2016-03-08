@@ -86,7 +86,6 @@ myna_thin <-spThin( #thinning function
 summary(myna_thin)
 
 # Saving the thinned file####
-# print temporary dir
 print(tempdir())
 write.SpThin(
   myna_thin,
@@ -122,38 +121,6 @@ worldclim_and_pop <- stack(worldclim, population)
 #AVHRR landuse categorical grid
 landcover<-raster(paste(getwd(), "/AVHRR.tif", sep = ""))
 worldclim_pop_landcover <- stack(worldclim, population, landcover)
-
-#####
-
-# Spatial Thinning
-
-#####
-
-crs <- CRS('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs') # set coordinate system
-
-myna_thin <-spThin( #thinning function
-  myna_unique, 
-  x.col = "lon",
-  y.col = "lat",
-  dist = 5000,
-  method= "gurobi", #can change to "gurobi" to make it even faster, but have to install it first
-  great.circle.distance=TRUE)
-summary(myna_thin)
-
-# Saving the thinned file####
-# print temporary dir
-print(tempdir())
-write.SpThin(
-  myna_thin,
-  coords=FALSE,
-  dir=tempdir()
-)
-
-#can elect to read in .csv of all thinned points
-thin_myna2<-read.csv("thin_0001.csv", head=T)
-head(thin_myna2)
-thin_myna_coords<-thin_myna2[,2:3]
-dim(thin_myna_coords)
 
 #Prepare Training and Testing dataset####
 folds<-kfold(thin_myna_coords, k=4) #this is a 4 fold test
@@ -219,14 +186,14 @@ map_bioclim_predictions_florida_points
 ####
 
 #cropping the enviro variables
-myna_bounding_box<-Plot_ConvexHull(xcoord = thin_myna_coords$lon, ycoord = thin_myna_coords$lat, lcolor = "black")
-
 min(thin_myna_coords$lon)
 min(thin_myna_coords$lat)
 max(thin_myna_coords$lon)
 max(thin_myna_coords$lat)
 
 backg <- randomPoints(worldclim_pop_landcover, n=10000, ext = (extent(-179.988, 179.97, -43,51.6714))) #pull background points from specified extent
+backg <- randomPoints(worldclim_pop_landcover, n=10000, ext = (extent(myna_convex_hull)) #pull background points from specified extent
+
 plot(wrld_simpl)
 points(backg)
 points(thin_myna_coords, col= "red")
@@ -236,7 +203,18 @@ group <- kfold(backg, 4)
 backg_train <- backg[group != 1, ]
 backg_test <- backg[group == 1, ]
 
+#importing min. convex hull for myna
+setwd("/Users/rpecchia/Desktop/Zoogeo Spring 2016/zoogeo-project/data")
+myna_convex_hull <- readOGR(dsn = ".", layer = "min_convex_myna" )
+plot(wrld_simpl)
+points(thin_myna_coords, col = "red")
+plot(myna_convex_hull, add = T)
+
+####
+
 #running MaxEnt
+
+####
 mx_myna <- maxent(worldclim_pop_landcover, train, a=backg, args=c('betamultiplier=3','responsecurves=TRUE','writebackgroundpredictions=TRUE'))
 response(mx_myna)
 plot(mx_myna)
