@@ -12,6 +12,7 @@ library(maptools)
 library(spThin)
 library(ggplot2)
 library(rgdal)
+library(ENMeval)
 data(wrld_simpl)
 
 setwd("/Users/rpecchia/Desktop/Zoogeo Spring 2016/zoogeo-project/R")
@@ -121,63 +122,42 @@ worldclim_and_pop <- stack(worldclim, population)
 #AVHRR landuse categorical grid
 landcover<-raster(paste(getwd(), "/AVHRR.tif", sep = ""))
 worldclim_pop_landcover <- stack(worldclim, population, landcover)
+plot(landcover)
 
 #Prepare Training and Testing dataset####
+
+# k-fold
 folds<-kfold(thin_myna_coords, k=4) #this is a 4 fold test
+
+#random split
 train<-thin_myna_coords[folds>1,] #training has 75% of points
 test<-thin_myna_coords[folds==1,] #testing has 25% of points
 train<-train[,1:2]
 test<-test[,1:2]
 head(train) #just has lon/lat
 
+#plot training dataset
+plot(wrld_simpl)
+points(train, col = "red", cex = .5)
+
+#plot testing dataset
+plot(wrld_simpl)
+points(test, col = "blue", cex = .5)
+
 ####
 
 #Making the BioClim Model
 
 ####
-myna_bioclim<-bioclim(worldclim,thin_myna_coords) #this runs and saves the BIOCLIM model as an object
-myna_bioclim_predictions <- predict(myna_bioclim, worldclim, progress='text')
-plot(myna_bioclim_predictions)
-
-myna_bioclim_predictions_as_points <- rasterToPoints(myna_bioclim_predictions) #make predictions raster a set of points for ggplot
-df_myna_bioclim_predictions <- data.frame(myna_bioclim_predictions_as_points) #convert to data.frame
-head(df_myna_bioclim_predictions)
-colnames(df_myna_bioclim_predictions) <- c('lon', 'lat', 'Suitability') #Make appropriate column headings
-max(df_myna_bioclim_predictions$Suitability)
-
-map_bioclim_predictions <-ggplot(data=df_myna_bioclim_predictions, aes(y=lat, x=lon)) +
-  geom_raster(aes(fill=Suitability)) +
-  theme_bw() +
-  coord_equal() +
-  ggtitle("Common Myna BIOCLIM Model") +
-  theme(axis.title.x = element_text(size=16),
-        axis.title.y = element_text(size=16, angle=90),
-        axis.text.x = element_text(size=14),
-        axis.text.y = element_text(size=14),
-        plot.title = element_text(face="bold", size=20),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        legend.position = 'right',
-        legend.key = element_blank(),
-        panel.background = element_rect(fill = 'black')) +
-  #scale_fill_gradientn(colours=c("#ffffcc","#d9f0a3","#addd8e","#78c679","#41ab5d","#238443", "#005a32"), #green
-  #scale_fill_gradientn(colours=c("blue4","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"), na.value = "black",limits=c(0,.66))
-  #scale_fill_gradientn(colours=c("#efedf5","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"), na.value = "black",limits=c(0,.66))
-  scale_fill_gradientn(colours=c("dodgerblue4","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"), na.value = "black",limits=c(0,.66))
-
-map_bioclim_predictions #full world map
-
-map_bioclim_predictions_nc_america<-map_bioclim_predictions + coord_fixed(xlim = c(-125.8,-62.2), ylim = c(3, 50)) #north/central america
-map_bioclim_predictions_nc_america
-
-map_bioclim_predictions_nc_america_points <- map_bioclim_predictions_nc_america + geom_point(data=thin_myna_coords, aes(x=lon, y=lat),size=.25, color = "magenta2")
-#map_bioclim_predictions_nc_america_points
-
-map_bioclim_predictions_florida <- map_bioclim_predictions + coord_fixed(xlim = c(-88,-79), ylim = c(24, 32)) #florida
-map_bioclim_predictions_florida
-
-map_bioclim_predictions_florida_points<- map_bioclim_predictions_florida + geom_point(data=thin_myna_coords, aes(x=lon, y=lat),size=.25, color = "magenta2")
-map_bioclim_predictions_florida_points
+# myna_bioclim<-bioclim(worldclim,thin_myna_coords) #this runs and saves the BIOCLIM model as an object
+# myna_bioclim_predictions <- predict(myna_bioclim, worldclim, progress='text')
+# plot(myna_bioclim_predictions)
+# 
+# myna_bioclim_predictions_as_points <- rasterToPoints(myna_bioclim_predictions) #make predictions raster a set of points for ggplot
+# df_myna_bioclim_predictions <- data.frame(myna_bioclim_predictions_as_points) #convert to data.frame
+# head(df_myna_bioclim_predictions)
+# colnames(df_myna_bioclim_predictions) <- c('lon', 'lat', 'Suitability') #Make appropriate column headings
+# max(df_myna_bioclim_predictions$Suitability)
 
 #####
 
@@ -191,33 +171,156 @@ min(thin_myna_coords$lat)
 max(thin_myna_coords$lon)
 max(thin_myna_coords$lat)
 
-backg <- randomPoints(worldclim_pop_landcover, n=10000, ext = (extent(-179.988, 179.97, -43,51.6714))) #pull background points from specified extent
-backg <- randomPoints(worldclim_pop_landcover, n=10000, ext = (extent(myna_convex_hull)) #pull background points from specified extent
+# Jamie's mcp function
+mcp_myna <- mcp(thin_myna_coords)
+plot(wrld_simpl)
+plot(mcp_myna, add = T)
+
+bb_backg <- randomPoints(worldclim_pop_landcover, n=10000, ext = (extent(-179.988, 179.97, -43,51.6714))) #pull background points from specified extent
+
+#getting background of abiotic layers from mcp
+env_mask <- mask(worldclim_pop_landcover,mcp_myna) #mask takes all values that are not null, and returns
+env_crop <- crop(env_mask, mcp_myna)
+plot(env_crop[[1]])
+backg<-randomPoints(env_crop[[1]],n=10000)
 
 plot(wrld_simpl)
 points(backg)
-points(thin_myna_coords, col= "red")
-#now partition background points
+
+#now k-fold partition background points
 colnames(backg) = c('lon' , 'lat')
 group <- kfold(backg, 4)
 backg_train <- backg[group != 1, ]
 backg_test <- backg[group == 1, ]
 
-#importing min. convex hull for myna
-setwd("/Users/rpecchia/Desktop/Zoogeo Spring 2016/zoogeo-project/data")
-myna_convex_hull <- readOGR(dsn = ".", layer = "min_convex_myna" )
-plot(wrld_simpl)
-points(thin_myna_coords, col = "red")
-plot(myna_convex_hull, add = T)
+colnames(bb_backg) = c('lon' , 'lat')
+group <- kfold(bb_backg, 4)
+bb_backg_train <- bb_backg[group != 1, ]
+bb_backg_test <- bb_backg[group == 1, ]
 
 ####
 
-#running MaxEnt
+# ENMeval
 
 ####
-mx_myna <- maxent(worldclim_pop_landcover, train, a=backg, args=c('betamultiplier=3','responsecurves=TRUE','writebackgroundpredictions=TRUE'))
+#always keep a CSV of the same background!
+#AUC full is ACU of all localities
+#Mean. AUC over all iterations, then variation of AUC
+#mean ormission rate at 10% threshold
+#number of parameters used (is from the lambda file). #when selecting AIC, go with Delta AIC = 0
+#look @results
+
+enmeval_results <- ENMevaluate(thin_myna_coords, env=worldclim_pop_landcover, n.bg = 1000 ,method="block", overlap=TRUE, bin.output=TRUE, clamp=TRUE, parallel = TRUE)
+
+save(enmeval_results, file="enmeval_results_worldclim.rdata")
+# load("enmeval_results.rdata")
+
+#look at ENMeval for WorldClim
+plot(enmeval_results@predictions[[which (enmeval_results_worldclim@results$delta.AICc == 0) ]])
+points(enmeval_results@occ.pts, pch=21, bg=enmeval_results@occ.grp)
+head(enmeval_results@results)
+enmeval_results@results #all the results
+Q_enmeval<-enmeval_results@results#arrange by AICc value
+QQ_enmeval<-as.data.frame(Q_enmeval)
+head(QQ_enmeval)
+QQ_enmeval<-QQ_enmeval[,c(1,2,3,14)]
+head(QQ_enmeval)
+arrange(QQ_enmeval,AICc,settings,features,rm) #this will sort ENMeval results so that we can see exact settings for model with lowest AICc
+# #Shows that model with LQ ranging from .5-4.0 all had the lowest AICc
+enmeval_resultsm@overlap
+
+#Very important figures
+par(mfrow=c(2,2))
+eval.plot(enmeval_results@results, legend.position="topright")
+eval.plot(enmeval_results@results, "Mean.AUC", )
+eval.plot(enmeval_results@results, "Mean.AUC.DIFF", variance="Var.AUC.DIFF")
+eval.plot(enmeval_results_worldclim@results, "Mean.ORmin")
+ 
+enmeval_results_worldclim@results
+#specify how data should be partitioned w/ method="jackknife", "randomkfold", "user", "block", "checkerboard1", "checkerboard2".
+# n.bg is The number of random background localities to draw from the study extent
+#when overlap = TRUE, provides pairwise metric of niche overlap 
+#bin.output appends evaluations metrics for each evaluation bin to results table
+
+enmeval_results <- enmeval_results@results
+#subset to get rid of rows with AUC, take the one with lowest delta.AICc, then plug in optimal parameters
+
+## ENMEVAL TIPS####
+#always keep a CSV of the same background!
+#AUC full is ACU of all localities
+#Mean. AUC over all iterations, then variation of AUC
+#mean ormission rate at 10% threshold
+#number of parameters used (is from the lambda file). #when selecting AIC, go with Delta AIC = 0
+#look @results
+
+results <- res@results
+#subset to get ride of rows with AUC, take the one with lowest delta.AICc, then plug in optimal parameters
+
+####
+
+# MaxEnt with default settings full bounding box
+
+####
+
+mx_myna_default_bb <- maxent(worldclim_pop_landcover, train, a = bb_backg, args=c('responsecurves=TRUE','writebackgroundpredictions=TRUE'))
+response(mx_myna_default_bb)
+plot(mx_myna_default_bb)
+mx_myna_default_bb@lambdas
+
+#Model Evaluation 
+e_myna_default_bb <- evaluate(test, bb_backg_test, mx_myna_default_bb, worldclim_pop_landcover) #evalute test points, pseudo-absences (random background points), the model and predictors
+e_myna_default_bb #shows number of presences/absences/AUC and cor
+px_myna_default_bb <- predict(worldclim_pop_landcover, mx_myna_default_bb, progress= "" ) #make predictions of habitat suitability can include argument ext=ext
+plot(px_myna_default_bb, main= 'Maxent, raw values')
+writeRaster(px_myna_default_bb, filename="myna_default_bounding_box.tif", format="GTiff", overwrite=TRUE) #exporting a GEOtiff
+
+
+tr_myna_default_bb <- threshold(e_myna_default_bb, 'spec_sens' )
+tr_myna_default_bb
+plot(px_myna_default_bb > tr_myna_default_bb, main='presence/absence')
+
+plot(wrld_simpl, add=TRUE, border= 'dark grey' )
+points(train, pch= '+')
+plot(e_myna_default_bb, 'ROC')
+
+
+####
+
+# MaxEnt with default settings, MCH background
+
+####
+
+mx_myna_default <- maxent(worldclim_pop_landcover, train, a = backg, args=c('responsecurves=TRUE','writebackgroundpredictions=TRUE'))
+response(mx_myna_default)
+plot(mx_myna_default)
+mx_myna_default@lambdas
+
+#Model Evaluation 
+e_myna_default <- evaluate(test, backg_test, mx_myna_default, worldclim_pop_landcover) #evalute test points, pseudo-absences (random background points), the model and predictors
+e_myna_default #shows number of presences/absences/AUC and cor
+px_myna_default <- predict(worldclim_pop_landcover, mx_myna_default, progress= "" ) #make predictions of habitat suitability can include argument ext=ext
+plot(px_myna_default, main= 'Maxent, raw values')
+writeRaster(px_myna_default, filename="myna_default_for_qgis.tif", format="GTiff", overwrite=TRUE) #exporting a GEOtiff
+
+
+tr_myna_default <- threshold(e_myna_default, 'spec_sens' )
+tr_myna_default
+plot(px_myna_default > tr_myna_default, main='presence/absence')
+
+plot(wrld_simpl, add=TRUE, border= 'dark grey' )
+points(train, pch= '+')
+plot(e_myna_default, 'ROC')
+
+####
+
+#running MaxEnt with ENMeval settings
+
+####
+
+mx_myna_enmeval <- maxent(worldclim_pop_landcover, train, a = back, args=c('betamultiplier=3','responsecurves=TRUE','writebackgroundpredictions=TRUE'))
 response(mx_myna)
 plot(mx_myna)
+mx_myna@lambdas
 
 #Model Evaluation 
 e_myna <- evaluate(test, backg_test, mx_myna, worldclim_pop_landcover) #evalute test points, pseudo-absences (random background points), the model and predictors
@@ -227,7 +330,7 @@ plot(px_myna, main= 'Maxent, raw values')
 plot(wrld_simpl, add=TRUE, border= 'dark grey' )
 points(train, pch=16, cex=.15, col="cadetblue3") #map of training points
 points(test, pch=16, cex=.15, col="purple") #map of testing points
-tr_myn2 <- threshold(e_myna, 'spec_sens' )
+tr_myna <- threshold(e_myna, 'spec_sens' )
 tr_myna
 plot(px_myna > tr_myna, main='presence/absence')
 
@@ -235,49 +338,72 @@ plot(wrld_simpl, add=TRUE, border= 'dark grey' )
 points(train, pch= '+')
 plot(e_myna, 'ROC')
 
-#Plotting Maxent output
-myna_map_raster_to_points <- rasterToPoints(px_myna) #make predictions raster a set of points for ggplot
-df_myna <- data.frame(myna_map_raster_to_points) #convert to data.frame
-head(df_myna)
-colnames(df_myna) <- c('lon', 'lat', 'Suitability') #Make appropriate column headings
-plot(wrld_simpl)
-max(df_myna$Suitability)
-plot(wrld_simpl)
-points(filter(df_myna, Suitability >= ***), col="red")
-
-ggmap_myna <-ggplot(data=df_myna, aes(y=lat, x=lon)) +
-  geom_raster(aes(fill=Suitability)) +
-  theme_bw() +
-  coord_equal() +
-  ggtitle("MaxEnt Predictions for Common Myna") +
-  theme(axis.title.x = element_text(size=16),
-        axis.title.y = element_text(size=16, angle=90),
-        axis.text.x = element_text(size=14),
-        axis.text.y = element_text(size=14),
-        plot.title = element_text(face="bold", size=20),
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank(),
-        legend.position = 'right',
-        legend.key = element_blank(),
-        panel.background = element_rect(fill = 'black')
-  )
-
-worldmap_myna <- ggmap_myna + scale_fill_gradientn(colours=c("blue4","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"),
-                                                                    na.value = "black",limits=c(0,.82))
-worldmap_myna
-
-us_prediction_map_no_host <- p_no_host_all_worldclim2 + scale_fill_gradientn(colours=c("blue4","dodgerblue1","cyan1","darkolivegreen2","yellow1","darkorange1", "red"),
-                                                                             na.value = "black",limits=c(0,.90)) + 
-  coord_cartesian(xlim = c(-125.8,-62.2), ylim = c(22.8, 50)) #zoom in on US
-#us_prediction_map_no_host
-
 ####
 
-# Convex hull function from Chit Chat R
+# Minimum Convex Polygon Function
 
-###
-Plot_ConvexHull<-function(xcoord, ycoord, lcolor){
-  hpts <- chull(x = xcoord, y = ycoord)
-  hpts <- c(hpts, hpts[1])
-  lines(xcoord[hpts], ycoord[hpts], col = lcolor)
-}  
+#####
+
+mcp <- function (xy) {
+  # handler for spatial objects -- extracts coordinates
+  if (class(xy) == "SpatialPoints" | class(xy) == "SpatialPointsDataFrame") {
+    xy <- as.data.frame(coordinates(xy))
+  }
+  # get mcp indices
+  i <- chull(xy)
+  # get rows in xy for i
+  xy.mcp <- xy[i,]
+  # copy first row to last position to close shape
+  xy.mcp <- rbind(xy.mcp[nrow(xy.mcp),], xy.mcp)
+  # return polygon of mcp
+  return(SpatialPolygons(list(Polygons(list(Polygon(as.matrix(xy.mcp))), 1))))
+}
+
+#######
+
+#Test spatial block function from ENMeval
+
+######
+
+block <- get.block(train, backg_mcp)
+
+get.block <- function(occ, bg.coords){
+  # SPLIT OCC POINTS INTO FOUR SPATIAL GROUPS
+  noccs <- nrow(occ)
+  n1 <- ceiling(nrow(occ)/2)
+  n2 <- floor(nrow(occ)/2)
+  n3 <- ceiling(n1/2)
+  n4 <- ceiling(n2/2)
+  grpA <- occ[order(occ[, 2]),][1:n1,]
+  grpB <- occ[rev(order(occ[, 2])),][1:n2,]
+  grp1 <- grpA[order(grpA[, 1]),][1:(n3),]
+  grp2 <- grpA[!rownames(grpA)%in%rownames(grp1),]
+  grp3 <- grpB[order(grpB[, 1]),][1:(n4),]
+  grp4 <- grpB[!rownames(grpB)%in%rownames(grp3),]
+  
+  # SPLIT BACKGROUND POINTS BASED ON SPATIAL GROUPS
+  bvert <- mean(max(grp1[, 1]), min(grp2[, 1]))
+  tvert <- mean(max(grp3[, 1]), min(grp4[, 1]))
+  horz <- mean(max(grpA[, 2]), min(grpB[, 2]))
+  bggrp1 <- bg.coords[bg.coords[, 2] <= horz & bg.coords[, 1]<bvert,]
+  bggrp2 <- bg.coords[bg.coords[, 2] < horz & bg.coords[, 1]>=bvert,]
+  bggrp3 <- bg.coords[bg.coords[, 2] > horz & bg.coords[, 1]<=tvert,]
+  bggrp4 <- bg.coords[bg.coords[, 2] >= horz & bg.coords[, 1]>tvert,]
+  
+  r <- data.frame()
+  if (nrow(grp1) > 0) grp1$grp <- 1; r <- rbind(r, grp1)
+  if (nrow(grp2) > 0) grp2$grp <- 2; r <- rbind(r, grp2)
+  if (nrow(grp3) > 0) grp3$grp <- 3; r <- rbind(r, grp3)
+  if (nrow(grp4) > 0) grp4$grp <- 4; r <- rbind(r, grp4)
+  occ.grp <- r[order(as.numeric(rownames(r))),]$grp
+  
+  bgr <- data.frame()
+  if (nrow(bggrp1) > 0) bggrp1$grp <- 1; bgr <- rbind(bgr, bggrp1)
+  if (nrow(bggrp2) > 0) bggrp2$grp <- 2; bgr <- rbind(bgr, bggrp2)
+  if (nrow(bggrp3) > 0) bggrp3$grp <- 3; bgr <- rbind(bgr, bggrp3)
+  if (nrow(bggrp4) > 0) bggrp4$grp <- 4; bgr <- rbind(bgr, bggrp4)
+  bg.grp <- bgr[order(as.numeric(rownames(bgr))),]$grp
+  
+  out <- list(occ.grp=occ.grp, bg.grp=bg.grp)
+  return(out)
+}
