@@ -13,6 +13,7 @@ library(spThin)
 library(ggplot2)
 library(rgdal)
 library(ENMeval)
+library(scales)
 data(wrld_simpl)
 
 setwd("/Users/rpecchia/Desktop/Zoogeo Spring 2016/zoogeo-project/R")
@@ -99,7 +100,7 @@ thin_myna2<-read.csv("thin_0001.csv", head=T)
 head(thin_myna2)
 thin_myna2<-thin_myna2[,1:3]
 head(thin_myna2)
-
+dim(thin_myna2)
 ####
 
 # Download environmental data
@@ -113,16 +114,10 @@ points(points(myna_unique$lon, myna_unique$lat ,col = "blue", cex = .25))
 
 plot(worldclim[[19]], main = "Precip in Coldest Quarter \n and Common Myna Occurrences")
 points(points(myna_unique$lon, myna_unique$lat ,col = "blue", cex = .25))
-?points
 
 #Pop density from SEDAC @ Columbia
 population<-raster(paste(getwd(), "/Pop_density_2000/pop2.tif", sep = ""))
 worldclim_and_pop <- stack(worldclim, population)
-
-#AVHRR landuse categorical grid
-landcover<-raster(paste(getwd(), "/AVHRR.tif", sep = ""))
-worldclim_pop_landcover <- stack(worldclim, population, landcover)
-plot(landcover)
 
 #Prepare Training and Testing dataset####
 
@@ -138,11 +133,12 @@ head(train) #just has lon/lat
 
 #plot training dataset
 plot(wrld_simpl)
-points(train, col = "red", cex = .5)
+cols_red<-"red"
+points(train, col = alpha(cols_red, 0.4), cex = .5)
 
-#plot testing dataset
-plot(wrld_simpl)
-points(test, col = "blue", cex = .5)
+#overlay testing dataset
+cols<-"blue"
+points(test, col = alpha(cols, 0.4), cex = .5)
 
 ####
 
@@ -165,38 +161,35 @@ points(test, col = "blue", cex = .5)
 
 ####
 
-#cropping the enviro variables
+#Bounding Box Method
 min(thin_myna_coords$lon)
 min(thin_myna_coords$lat)
 max(thin_myna_coords$lon)
 max(thin_myna_coords$lat)
 
 # Jamie's mcp function
-mcp_myna <- mcp(thin_myna_coords)
+mcp_myna <- mcp(train)
 plot(wrld_simpl)
+points(thin_myna_coords, col = "cyan4", cex = .5)
 plot(mcp_myna, add = T)
 
-bb_backg <- randomPoints(worldclim_pop_landcover, n=10000, ext = (extent(-179.988, 179.97, -43,51.6714))) #pull background points from specified extent
+#use this code for random sampling from bounding box
+#bb_backg <- randomPoints(worldclim_and_pop, n=10000, ext = (extent(-179.988, 179.97, -43,51.6714))) #pull background points from specified extent
 
-#getting background of abiotic layers from mcp
-env_mask <- mask(worldclim_pop_landcover,mcp_myna) #mask takes all values that are not null, and returns
+#getting background points from mcp
+env_mask <- mask(worldclim_and_pop, mcp_myna) #mask takes all values that are not null, and returns
 env_crop <- crop(env_mask, mcp_myna)
 plot(env_crop[[1]])
 backg<-randomPoints(env_crop[[1]],n=10000)
 
 plot(wrld_simpl)
-points(backg)
+points(backg, col = "darkorchid3", cex = .05)
 
 #now k-fold partition background points
 colnames(backg) = c('lon' , 'lat')
 group <- kfold(backg, 4)
 backg_train <- backg[group != 1, ]
 backg_test <- backg[group == 1, ]
-
-colnames(bb_backg) = c('lon' , 'lat')
-group <- kfold(bb_backg, 4)
-bb_backg_train <- bb_backg[group != 1, ]
-bb_backg_test <- bb_backg[group == 1, ]
 
 ####
 
@@ -208,9 +201,8 @@ bb_backg_test <- bb_backg[group == 1, ]
 #Mean. AUC over all iterations, then variation of AUC
 #mean ormission rate at 10% threshold
 #number of parameters used (is from the lambda file). #when selecting AIC, go with Delta AIC = 0
-#look @results
-
-enmeval_results <- ENMevaluate(thin_myna_coords, env=worldclim_pop_landcover, n.bg = 1000 ,method="block", overlap=TRUE, bin.output=TRUE, clamp=TRUE, parallel = TRUE)
+#look @r2esults
+enmeval_results <- ENMevaluate(train, env = worldclim_pop_landcover, bg.coords = backg_mcp ,method="block", overlap=TRUE, bin.output=TRUE, clamp=TRUE)
 
 save(enmeval_results, file="enmeval_results_worldclim.rdata")
 # load("enmeval_results.rdata")
@@ -262,54 +254,66 @@ results <- res@results
 
 ####
 
-mx_myna_default_bb <- maxent(worldclim_pop_landcover, train, a = bb_backg, args=c('responsecurves=TRUE','writebackgroundpredictions=TRUE'))
-response(mx_myna_default_bb)
-plot(mx_myna_default_bb)
-mx_myna_default_bb@lambdas
-
-#Model Evaluation 
-e_myna_default_bb <- evaluate(test, bb_backg_test, mx_myna_default_bb, worldclim_pop_landcover) #evalute test points, pseudo-absences (random background points), the model and predictors
-e_myna_default_bb #shows number of presences/absences/AUC and cor
-px_myna_default_bb <- predict(worldclim_pop_landcover, mx_myna_default_bb, progress= "" ) #make predictions of habitat suitability can include argument ext=ext
-plot(px_myna_default_bb, main= 'Maxent, raw values')
-writeRaster(px_myna_default_bb, filename="myna_default_bounding_box.tif", format="GTiff", overwrite=TRUE) #exporting a GEOtiff
-
-
-tr_myna_default_bb <- threshold(e_myna_default_bb, 'spec_sens' )
-tr_myna_default_bb
-plot(px_myna_default_bb > tr_myna_default_bb, main='presence/absence')
-
-plot(wrld_simpl, add=TRUE, border= 'dark grey' )
-points(train, pch= '+')
-plot(e_myna_default_bb, 'ROC')
-
-
+# mx_myna_default_bb <- maxent(worldclim_pop_landcover, train, a = bb_backg, args=c('responsecurves=TRUE','writebackgroundpredictions=TRUE'))
+# response(mx_myna_default_bb)
+# plot(mx_myna_default_bb)
+# mx_myna_default_bb@lambdas
+# 
+# #Model Evaluation 
+# e_myna_default_bb <- evaluate(test, bb_backg_test, mx_myna_default_bb, worldclim_pop_landcover) #evalute test points, pseudo-absences (random background points), the model and predictors
+# e_myna_default_bb #shows number of presences/absences/AUC and cor
+# px_myna_default_bb <- predict(worldclim_pop_landcover, mx_myna_default_bb, progress= "" ) #make predictions of habitat suitability can include argument ext=ext
+# plot(px_myna_default_bb, main= 'Maxent, raw values')
+# writeRaster(px_myna_default_bb, filename="myna_default_bounding_box.tif", format="GTiff", overwrite=TRUE) #exporting a GEOtiff
+# 
+# 
+# tr_myna_default_bb <- threshold(e_myna_default_bb, 'spec_sens' )
+# tr_myna_default_bb
+# plot(px_myna_default_bb > tr_myna_default_bb, main='presence/absence')
+# 
+# plot(wrld_simpl, add=TRUE, border= 'dark grey' )
+# points(train, pch= '+')
+# plot(e_myna_default_bb, 'ROC')
+# 
+# 
 ####
 
 # MaxEnt with default settings, MCH background
 
 ####
 
-mx_myna_default <- maxent(worldclim_pop_landcover, train, a = backg, args=c('responsecurves=TRUE','writebackgroundpredictions=TRUE'))
-response(mx_myna_default)
-plot(mx_myna_default)
-mx_myna_default@lambdas
+mx_myna <- maxent(worldclim_and_pop, train, a = backg, args=c('responsecurves=TRUE','writebackgroundpredictions=TRUE'))
+response(mx_myna)
+plot(mx_myna)
+mx_myna@lambdas
 
 #Model Evaluation 
-e_myna_default <- evaluate(test, backg_test, mx_myna_default, worldclim_pop_landcover) #evalute test points, pseudo-absences (random background points), the model and predictors
-e_myna_default #shows number of presences/absences/AUC and cor
-px_myna_default <- predict(worldclim_pop_landcover, mx_myna_default, progress= "" ) #make predictions of habitat suitability can include argument ext=ext
+e_myna <- evaluate(test, backg, mx_myna, worldclim_and_pop) #evalute test points, pseudo-absences (random background points), the model and predictors
+e_myna_with_threshold <- evaluate(test, backg, mx_myna, worldclim_and_pop, tr = 0.3495931)
+boxplot(e_myna)
+density(e_myna)
+
+boxplot(e_myna_with_threshold)
+e_myna_with_threshold@confusion #confusion matrix
+
+e_myna #shows number of presences/absences/AUC and cor
+px_myna_default <- predict(worldclim_and_pop, mx_myna, progress= "" ) #make predictions of habitat suitability can include argument ext=ext
 plot(px_myna_default, main= 'Maxent, raw values')
 writeRaster(px_myna_default, filename="myna_default_for_qgis.tif", format="GTiff", overwrite=TRUE) #exporting a GEOtiff
 
-
-tr_myna_default <- threshold(e_myna_default, 'spec_sens' )
-tr_myna_default
-plot(px_myna_default > tr_myna_default, main='presence/absence')
+#creating binary map
+tr_myna_spec_sens <- threshold(e_myna, 'spec_sens' )
+tr_myna_no_omission <- threshold(e_myna, 'no_omission' )
+tr_myna_spec_sens 
+tr_myna_no_omission #really low!
+threshold_map <- px_myna_default > tr_myna_spec_sens
+plot(px_myna_default > tr_myna_spec_sens)
+plot(threshold_map)
+writeRaster(threshold_map, filename="myna_threshold_map.tif", format="GTiff", overwrite=TRUE) #exporting a GEOtiff
 
 plot(wrld_simpl, add=TRUE, border= 'dark grey' )
 points(train, pch= '+')
-plot(e_myna_default, 'ROC')
+plot(e_myna, 'ROC')
 
 ####
 
@@ -357,53 +361,4 @@ mcp <- function (xy) {
   xy.mcp <- rbind(xy.mcp[nrow(xy.mcp),], xy.mcp)
   # return polygon of mcp
   return(SpatialPolygons(list(Polygons(list(Polygon(as.matrix(xy.mcp))), 1))))
-}
-
-#######
-
-#Test spatial block function from ENMeval
-
-######
-
-block <- get.block(train, backg_mcp)
-
-get.block <- function(occ, bg.coords){
-  # SPLIT OCC POINTS INTO FOUR SPATIAL GROUPS
-  noccs <- nrow(occ)
-  n1 <- ceiling(nrow(occ)/2)
-  n2 <- floor(nrow(occ)/2)
-  n3 <- ceiling(n1/2)
-  n4 <- ceiling(n2/2)
-  grpA <- occ[order(occ[, 2]),][1:n1,]
-  grpB <- occ[rev(order(occ[, 2])),][1:n2,]
-  grp1 <- grpA[order(grpA[, 1]),][1:(n3),]
-  grp2 <- grpA[!rownames(grpA)%in%rownames(grp1),]
-  grp3 <- grpB[order(grpB[, 1]),][1:(n4),]
-  grp4 <- grpB[!rownames(grpB)%in%rownames(grp3),]
-  
-  # SPLIT BACKGROUND POINTS BASED ON SPATIAL GROUPS
-  bvert <- mean(max(grp1[, 1]), min(grp2[, 1]))
-  tvert <- mean(max(grp3[, 1]), min(grp4[, 1]))
-  horz <- mean(max(grpA[, 2]), min(grpB[, 2]))
-  bggrp1 <- bg.coords[bg.coords[, 2] <= horz & bg.coords[, 1]<bvert,]
-  bggrp2 <- bg.coords[bg.coords[, 2] < horz & bg.coords[, 1]>=bvert,]
-  bggrp3 <- bg.coords[bg.coords[, 2] > horz & bg.coords[, 1]<=tvert,]
-  bggrp4 <- bg.coords[bg.coords[, 2] >= horz & bg.coords[, 1]>tvert,]
-  
-  r <- data.frame()
-  if (nrow(grp1) > 0) grp1$grp <- 1; r <- rbind(r, grp1)
-  if (nrow(grp2) > 0) grp2$grp <- 2; r <- rbind(r, grp2)
-  if (nrow(grp3) > 0) grp3$grp <- 3; r <- rbind(r, grp3)
-  if (nrow(grp4) > 0) grp4$grp <- 4; r <- rbind(r, grp4)
-  occ.grp <- r[order(as.numeric(rownames(r))),]$grp
-  
-  bgr <- data.frame()
-  if (nrow(bggrp1) > 0) bggrp1$grp <- 1; bgr <- rbind(bgr, bggrp1)
-  if (nrow(bggrp2) > 0) bggrp2$grp <- 2; bgr <- rbind(bgr, bggrp2)
-  if (nrow(bggrp3) > 0) bggrp3$grp <- 3; bgr <- rbind(bgr, bggrp3)
-  if (nrow(bggrp4) > 0) bggrp4$grp <- 4; bgr <- rbind(bgr, bggrp4)
-  bg.grp <- bgr[order(as.numeric(rownames(bgr))),]$grp
-  
-  out <- list(occ.grp=occ.grp, bg.grp=bg.grp)
-  return(out)
 }
