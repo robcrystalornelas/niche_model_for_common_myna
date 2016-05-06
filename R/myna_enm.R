@@ -197,24 +197,24 @@ max(thin_myna_coords$lat)
 
 ####
 
-# # Generate 1 degree buffered 'crop circle'. occ.sp is a csv file of your occurrence records
+# Generate 1 degree buffered 'crop circle'
 
-#convert list of occurrences to sp.df
+#convert list of occurrences to a spatial points data.frame
 myna_occurrences_spdf <- SpatialPointsDataFrame(coords = thin_myna_coords, data = thin_myna_coords,
                                                 proj4string = CRS("+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0"))
 
 plot(myna_occurrences_spdf)
-# backg_buffered_extent <- gBuffer(myna_occurrences_spdf, width = 1)
-# plot(backg_buffered_extent)
-# 
+backg_buffered_extent <- gBuffer(myna_occurrences_spdf, width = 1) #with = degrees of the buffer
+plot(backg_buffered_extent)
+
 # Crop and mask environmental variables by the 'crop circle' extent
 # env_msk is a stack of the environmental data rasters
-# env_msk_bg <- mask(worldclim_and_pop, backg_buffered_extent)
-# plot(env_msk_bg[[1]])
-# set.seed(1)
-# backg.env <- randomPoints(env_msk_bg[[1]], n=10000, tryf = 50)
-# plot(wrld_simpl)
-# points(backg.env, col = "red", cex = .05)
+env_msk_bg <- mask(worldclim_and_pop, backg_buffered_extent)
+plot(env_msk_bg[[1]])
+set.seed(1) #setting seed for random variable selection
+backg.env <- randomPoints(env_msk_bg[[1]], n=10000) #May have to try different values of agrument "tryf = 50" to get sufficient background points OR increase degrees for buffer
+plot(wrld_simpl)
+points(backg.env, col = "red", cex = .05)
 
 # # k-fold partition background points
 # #now k-fold partition background points
@@ -303,6 +303,8 @@ mx_myna <- maxent(worldclim_and_pop, train, a = backg, args=c('responsecurves=TR
 response(mx_myna)
 plot(mx_myna)
 mx_myna@results
+mx_myna@presence #raster of suitability values for presences
+mx_myna@absence #raster of suitability values for absences
 
 #Model Evaluation 
 e_myna <- evaluate(test, backg, mx_myna, worldclim_and_pop) #evalute test points, pseudo-absences (random background points), the model and predictors
@@ -325,7 +327,7 @@ plot(mx_myna_all_occs)
 
 px_myna_all_occs <- predict(worldclim_and_pop, mx_myna_all_occs) #make predictions of habitat suitability can include argument ext=ext
 plot(px_myna_all_occs, main= 'Maxent, raw values')
-writeRaster(px_myna_all_occs, filename="myna_all_occs_for_qgis.tif", format="GTiff", overwrite=TRUE) #exporting a GEOtiff
+writeRaster(px_myna_all_occs, filename="myna_all_occs_MCH_for_qgis.tif", format="GTiff", overwrite=TRUE) #exporting a GEOtiff
 
 #Plotting Maxent output
 map_myna_all_occs <- rasterToPoints(px_myna_all_occs) #make predictions raster a set of points for ggplot
@@ -490,10 +492,27 @@ points(backg_five_degree, col = "red", cex = 0.2)
 
 mx_myna_crop_k_fold_qgis_five <- maxent(worldclim_and_pop, thin_myna_coords, a = backg_five_degree, args=c('doclamp=TRUE','responsecurves=TRUE', 'replicatetype=crossvalidate', 'replicates=10','writebackgroundpredictions=TRUE','outputgrids=TRUE'))
 mx_myna_crop_k_fold_qgis_five
+mx_myna_crop_k_fold_qgis_five@results
+
 
 mx_myna_all_occs_five_degree <- maxent(worldclim_and_pop, thin_myna_coords, a = backg_five_degree, args=c('doclamp=TRUE','responsecurves=TRUE','writebackgroundpredictions=TRUE','outputgrids=TRUE'))
+mx_myna_all_occs_five_degree
+plot(mx_myna_all_occs_five_degree)
+response(mx_myna_all_occs_five_degree)
 mx_myna_all_occs_five_degree@lambdas
+mx_myna_all_occs_five_degree@results
+str(mx_myna_all_occs_five_degree)
 
+#how many parameters in model?
+#First, read in lambdas file
+curpath <- "/private/var/folders/ws/_8nc2k3x5fjf4w5tnzxr95wh0000gn/T/R_raster_rpecchia/maxent/1577985387"
+rf <- read.table(file.path(curpath, 'species.lambdas'), sep=',', fill=TRUE)
+# record no. of params (restrict df to rows with four values and no 0 in 2nd column)
+p <- nrow(rf[!is.na(rf[3]) & rf[2] != 0,])
+p
+
+plot(wrld_simpl)
+points(thin_myna_coords)
 #Make predictions
 px_myna_all_occs_five_degree <- predict(worldclim_and_pop, mx_myna_all_occs_five_degree) #make predictions of habitat suitability can include argument ext=ext
 plot(px_myna_all_occs_five_degree, main= 'Maxent, raw values')
@@ -507,6 +526,112 @@ colnames(df_myna_five_degree) <- c('lon', 'lat', 'Suitability') #Make appropriat
 max(df_myna_five_degree$Suitability)
 plot(wrld_simpl)
 points(filter(df_myna_five_degree, Suitability >= .73), col="red")
+
+####
+
+# Lockwood lab homework
+
+####
+
+# myna model with no population covariate
+mx_myna_no_pop <- maxent(worldclim, thin_myna_coords, a = backg_five_degree, args=c('doclamp=TRUE','responsecurves=TRUE','writebackgroundpredictions=TRUE','outputgrids=TRUE'))
+mx_myna_no_pop
+
+px_myna_myna_no_pop <- predict(worldclim, mx_myna_no_pop) #make predictions of habitat suitability can include argument ext=ext
+plot(px_myna_myna_no_pop, main= 'Maxent, raw values')
+writeRaster(px_myna_myna_no_pop, filename="myna_no_pop_for_qgis.tif", format="GTiff", overwrite=TRUE) #exporting a GEOtiff
+
+
+####
+
+# Blocking in ENMeval
+
+####
+thin_myna_coords2<-thin_myna_coords
+backg_five_degree2<-as.data.frame(backg_five_degree)
+
+names(thin_myna_coords2) <- c("xocc","yocc")
+names(backg_five_degree2)<-c("xbg", "ybg")
+library(ENMeval)
+library(dismo)
+myna_blocks <- get.block(thin_myna_coords2, backg_five_degree2) 
+
+myna_blocks$back
+plot(wrld_simpl)
+points(thin_myna_coords2, pch=23, bg=myna_blocks$occ.grp)
+plot(wrld_simpl)
+points(backg_five_degree2, pch=21, bg=myna_blocks$bg.grp)
+
+## Example Data
+set.seed(1)
+### Create environmental extent (raster)
+env <- raster(matrix(nrow=25, ncol=25))
+### Create presence localities
+set.seed(1)
+nocc <- 25
+xocc <- rnorm(nocc, sd=0.25) + 0.5
+yocc <- runif(nocc, 0, 1)
+occ.pts <- as.data.frame(cbind(xocc, yocc))
+
+### Create background points
+nbg <- 500
+xbg <- runif(nbg, 0, 1)
+ybg <- runif(nbg, 0, 1)
+bg.pts <- as.data.frame(cbind(xbg, ybg))
+### Show points
+plot(env)
+points(bg.pts)
+points(occ.pts, pch=21, bg=2)
+### Block partitioning method
+blk.pts <- get.block(occ.pts, bg.pts)
+plot(env)
+points(occ.pts, pch=23, bg=blk.pts$occ.grp)
+plot(env)
+points(bg.pts, pch=21, bg=blk.pts$bg.grp)
+
+head(occ.pts)
+head(bg.pts)
+
+get.block <- function(occ, bg.coords){
+  # SPLIT OCC POINTS INTO FOUR SPATIAL GROUPS
+  noccs <- nrow(occ)
+  n1 <- ceiling(nrow(occ)/2)
+  n2 <- floor(nrow(occ)/2)
+  n3 <- ceiling(n1/2)
+  n4 <- ceiling(n2/2)
+  grpA <- occ[order(occ[, 2]),][1:n1,]
+  grpB <- occ[rev(order(occ[, 2])),][1:n2,]
+  grp1 <- grpA[order(grpA[, 1]),][1:(n3),]
+  grp2 <- grpA[!rownames(grpA)%in%rownames(grp1),]
+  grp3 <- grpB[order(grpB[, 1]),][1:(n4),]
+  grp4 <- grpB[!rownames(grpB)%in%rownames(grp3),]
+  
+  # SPLIT BACKGROUND POINTS BASED ON SPATIAL GROUPS
+  bvert <- mean(max(grp1[, 1]), min(grp2[, 1]))
+  tvert <- mean(max(grp3[, 1]), min(grp4[, 1]))
+  horz <- mean(max(grpA[, 2]), min(grpB[, 2]))
+  bggrp1 <- bg.coords[bg.coords[, 2] <= horz & bg.coords[, 1]<bvert,]
+  bggrp2 <- bg.coords[bg.coords[, 2] < horz & bg.coords[, 1]>=bvert,]
+  bggrp3 <- bg.coords[bg.coords[, 2] > horz & bg.coords[, 1]<=tvert,]
+  bggrp4 <- bg.coords[bg.coords[, 2] >= horz & bg.coords[, 1]>tvert,]
+  
+  r <- data.frame()
+  if (nrow(grp1) > 0) grp1$grp <- 1; r <- rbind(r, grp1)
+  if (nrow(grp2) > 0) grp2$grp <- 2; r <- rbind(r, grp2)
+  if (nrow(grp3) > 0) grp3$grp <- 3; r <- rbind(r, grp3)
+  if (nrow(grp4) > 0) grp4$grp <- 4; r <- rbind(r, grp4)
+  occ.grp <- r[order(as.numeric(rownames(r))),]$grp
+  
+  bgr <- data.frame()
+  if (nrow(bggrp1) > 0) bggrp1$grp <- 1; bgr <- rbind(bgr, bggrp1)
+  if (nrow(bggrp2) > 0) bggrp2$grp <- 2; bgr <- rbind(bgr, bggrp2)
+  if (nrow(bggrp3) > 0) bggrp3$grp <- 3; bgr <- rbind(bgr, bggrp3)
+  if (nrow(bggrp4) > 0) bggrp4$grp <- 4; bgr <- rbind(bgr, bggrp4)
+  bg.grp <- bgr[order(as.numeric(rownames(bgr))),]$grp
+  
+  out <- list(occ.grp=occ.grp, bg.grp=bg.grp)
+  return(out)
+}
 
 ####
 
